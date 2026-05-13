@@ -5,7 +5,7 @@ FastAPI application factory and routes.
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query, Response
 
 from .session_manager import SessionManager
 from .modules.status_monitor import StatusMonitor
@@ -40,17 +40,24 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     app = FastAPI(
         title="Bloomberg API Relay",
-        description="A relay layer for Bloomberg BLPAPI",
+        description="A relay layer for Bloomberg BLPAPI via RESTful API endpoints implemented with FastAPI",
         version="0.1.0",
         lifespan=lifespan
     )
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    async def favicon():
+        return Response(status_code=204)
 
     @app.get("/helloworld")
     async def helloworld():
         return {"message": "Hello, World!"}
 
     @app.get("/data")
-    async def get_data(ticker: str = "AAPL US Equity", field: str = "PX_LAST"):
+    async def get_data(
+        ticker: list[str] = Query(["AAPL US Equity"]), 
+        field: list[str] = Query(["PX_LAST"])
+    ):
         try:
             data = await sm.get_refdata(ticker, field)
             return {"status": "success", "data": data}

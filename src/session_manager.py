@@ -135,12 +135,15 @@ class SessionManager:
 
 
     # Async APIs
-    async def get_refdata(self, ticker: str, field: str) -> str:
+    async def get_refdata(self, tickers: list[str], fields: list[str]) -> str:
         service = self._session.getService("//blp/refdata")
         request = service.createRequest("ReferenceDataRequest")
 
-        request.append("securities", ticker)
-        request.append("fields", field)
+        for t in tickers:
+            request.append("securities", t)
+    
+        for f in fields:
+            request.append("fields", f)
 
         cid = blpapi.CorrelationId(str(uuid.uuid4()))
         self._session.sendRequest(request, correlationId=cid)
