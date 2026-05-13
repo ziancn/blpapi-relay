@@ -1,0 +1,66 @@
+"""
+FastAPI application factory and routes.
+"""
+
+import asyncio
+import logging
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, HTTPException
+
+from .session_manager import SessionManager
+from .modules.status_monitor import StatusMonitor
+
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+
+# Global session manager
+sm = SessionManager()
+status_monitor = StatusMonitor()
+sm.register_module(status_monitor)
+
+
+# This is the new way to handle startup and shutdown in FastAPI
+# Replacing @startup and @shutdown event handlers
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Handle startup and shutdown."""
+    try: sm.start()
+    except Exception as e: raise
+
+    yield
+    
+    try: sm.stop()
+    except Exception as e: raise
+
+
+# FastAPI app instance creation method
+# I don't really understand this part, just use AI generated code for now
+def create_app() -> FastAPI:
+    app = FastAPI(
+        title="Bloomberg API Relay",
+        description="A relay layer for Bloomberg BLPAPI",
+        version="0.1.0",
+        lifespan=lifespan
+    )
+
+    @app.get("/helloworld")
+    async def helloworld():
+        return {"message": "Hello, World!"}
+
+    @app.get("/data")
+    async def get_data(ticker: str = "AAPL US Equity", field: str = "PX_LAST"):
+        try:
+            data = await sm.get_refdata(ticker, field)
+            return {"status": "success", "data": data}
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=504, detail="Bloomberg Timeout")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    return app
+
+
+# Create app instance for ASGI servers
+app = create_app()

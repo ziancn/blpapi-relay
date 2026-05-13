@@ -1,0 +1,10 @@
+[project]
+name = "blpapi-relay"
+version = "0.1.0"
+description = "A relay layer for localhosted browser process to communicate with Bloomberg blpapi"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.136.1",
+    "uvicorn>=0.46.0",
+]
