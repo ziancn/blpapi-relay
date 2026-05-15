@@ -11,6 +11,7 @@ from .protocol import ModuleProtocol
 # Configure logger for this module
 logger = logging.getLogger(__name__)
 
+
 # blpapi names
 class SessionMsg:
     SLOW_CONSUMER_WARNING         = blpapi.Name("SlowConsumerWarning")

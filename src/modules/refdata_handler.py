@@ -14,7 +14,6 @@ from .protocol import ModuleProtocol
 logger = logging.getLogger(__name__)
 
 
-
 def parse_refdata_response(msg: blpapi.Message) -> dict:
     # Utility method to parse Bloomberg response message into a more structured format
     data = {}
