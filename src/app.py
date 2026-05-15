@@ -9,16 +9,19 @@ from fastapi import FastAPI, HTTPException, Query, Response
 
 from .session_manager import SessionManager
 from .modules.status_monitor import StatusMonitor
+from .modules.refdata_handler import RefDataHandler
 
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
 
-# Global session manager
 sm = SessionManager()
 status_monitor = StatusMonitor()
+refdata_handler = RefDataHandler()
+
 sm.register_module(status_monitor)
+sm.register_module(refdata_handler)
 
 
 # This is the new way to handle startup and shutdown in FastAPI
@@ -26,13 +29,17 @@ sm.register_module(status_monitor)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Handle startup and shutdown."""
-    try: sm.start()
-    except Exception as e: raise
+    try:
+        sm.start()
+    except Exception as e:
+        raise
 
     yield
     
-    try: sm.stop()
-    except Exception as e: raise
+    try:
+        sm.stop()
+    except Exception as e:
+        raise
 
 
 # FastAPI app instance creation method
@@ -53,13 +60,13 @@ def create_app() -> FastAPI:
     async def helloworld():
         return {"message": "Hello, World!"}
 
-    @app.get("/data")
-    async def get_data(
-        ticker: list[str] = Query(["AAPL US Equity"]), 
-        field: list[str] = Query(["PX_LAST"])
+    @app.get("/refdata")
+    async def get_refdata(
+        tickers: list[str] = Query(["AAPL US Equity"]), 
+        fields: list[str] = Query(["PX_LAST"])
     ):
         try:
-            data = await sm.get_refdata(ticker, field)
+            data = await refdata_handler.get_refdata(tickers, fields)
             return {"status": "success", "data": data}
         except asyncio.TimeoutError:
             raise HTTPException(status_code=504, detail="Bloomberg Timeout")

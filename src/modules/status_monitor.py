@@ -35,7 +35,7 @@ class StatusMonitor(ModuleProtocol):
     Logging module
     """
     def __init__(self):
-        self._log_prefix = f"[{self.__class__.__name__}]"
+        ...
 
 
     def process_event(

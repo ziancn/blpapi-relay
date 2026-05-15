@@ -5,6 +5,17 @@ description = "A relay layer for localhosted browser process to communicate with
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "blpapi",
     "fastapi>=0.136.1",
     "uvicorn>=0.46.0",
+    "python-socketio>=5.0.0",
+    "python-engineio>=4.0.0",
 ]
+
+[[tool.uv.index]]
+name = "bloomberg"
+url = "https://blpapi.bloomberg.com/repository/releases/python/simple/"
+explicit = true
+
+[tool.uv.sources]
+blpapi = { index = "bloomberg" }
