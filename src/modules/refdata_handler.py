@@ -43,7 +43,6 @@ class RefDataHandler(ModuleProtocol):
         self.session = None
         # Key: correlation_id, Value: {"future", "loop"}
         self._pending_requests = {}
-        ...
 
 
     def process_event(
