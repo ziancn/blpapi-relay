@@ -17,7 +17,6 @@ import asyncio
 import json
 import datetime
 
-from typing import Dict, Set
 from fastapi import WebSocket
 
 from .protocol import ModuleProtocol
@@ -70,12 +69,13 @@ def parse_mktdata_event_msg(msg):
 
 
 
-class SubscriptionHandler(ModuleProtocol):
+class MktDataHandler(ModuleProtocol):
     def __init__(self, loop = None):
         self.session: blpapi.Session = None
         self.loop = loop or asyncio.get_event_loop()
-        self.topics: Dict[str, Set[WebSocket]] = {}
-        self.cids: Dict[str, str] = {}
+
+        self.ticker_to_websockets: dict[str, set[WebSocket]] = {}
+        self.ticker_to_fields: dict[str, set[str]] = {}
 
     
     def process_event(
@@ -92,29 +92,31 @@ class SubscriptionHandler(ModuleProtocol):
         for msg in event:
             if not msg.correlationIds(): continue
 
-            topic = msg.correlationIds()[0].value()
+            ticker = msg.correlationIds()[0].value()
 
-            if topic in self.topics:
+            if ticker in self.ticker_to_fields:
+                logger.debug(f"Processing subscription data for {ticker}")
                 data = parse_mktdata_event_msg(msg)
-                self.broadcast(topic, data)
+                self.broadcast(ticker, data)
 
 
-    # ==================== #
-    # WebSocket management
-    # Async jobs
+    # ====================
+    # WebSocket management 
+    # ====================
 
-    def broadcast(self, topic: str, data: dict):
+    def broadcast(self, ticker: str, data: dict):
         if self.loop.is_running():
-            asyncio.run_coroutine_threadsafe(self.send_update(topic, data), self.loop)
+            asyncio.run_coroutine_threadsafe(self.send_update(ticker, data), self.loop)
         else:
             logger.warning("Asyncio event loop is not running. Cannot broadcast update.")
 
 
-    async def send_update(self, topic: str, data: dict):
-        """Send update to all WebSockets that subscribed to a topic"""
+    async def send_update(self, ticker: str, data: dict):
+        """Send update to all WebSockets that subscribed to a ticker"""
         json_payload = json.dumps(data)
-        if topic in self.topics:
-            sockets = self.topics[topic]
+        logger.debug(f"Broadcasting data for subscribers of {ticker}")
+        if ticker in self.ticker_to_websockets:
+            sockets = self.ticker_to_websockets[ticker]
             if sockets:
                 await asyncio.gather(
                     *[ws.send_json(json_payload) for ws in sockets],
@@ -122,35 +124,54 @@ class SubscriptionHandler(ModuleProtocol):
                 )
 
 
-    async def connect(self, websocket: WebSocket, topic: str):
+    async def connect(
+            self, 
+            websocket: WebSocket,
+            tickers: list[str],
+            fields: list[str],
+    ):
         """
-        `topic` we expect here is the full subscription string like:
-        "//blp/mktdata/ticker/IBM US Equity?fields=BID,ASK"
+        Here we manage market data subscription from ticker level (ticker as key and cid).
         """
-        if topic not in self.topics:
-            self.topics[topic] = {websocket}
+        for ticker in tickers:
+            if ticker not in self.ticker_to_fields:
+                # New ticker
+                self.ticker_to_websockets[ticker] = {websocket}
+                self.ticker_to_fields[ticker] = set(fields)
 
-            cid = blpapi.CorrelationId(topic)
-            self.cids[topic] = cid
+                # Subscribe
+                cid = blpapi.CorrelationId(ticker)
+                sub = blpapi.SubscriptionList()
+                sub.add(topic=ticker, fields=fields, correlationId=cid)
+                self.session.subscribe(sub)
 
-            subscription = blpapi.SubscriptionList()
-            subscription.add(topic, correlationId=cid)
-            self.session.subscribe(subscription)
-        else:
-            self.topics[topic].add(websocket)
+            else:
+                # Exisiting ticker
+                self.ticker_to_websockets[ticker].add(websocket)
 
-    
-    async def disconnect(self, websocket: WebSocket, topic: str):
-        if topic in self.topics:
-            self.topics[topic].discard(websocket)
-            if not self.topics[topic]:  # No more subscribers for this topic
-                cid = self.cids.pop(topic, None)
-                if cid:
+                additional_fields = set(fields) - self.ticker_to_fields[ticker]
+
+                if additional_fields:
+                    self.ticker_to_fields[ticker].union(fields)
+                    # Resubscribe
+                    cid = blpapi.CorrelationId(ticker)
+                    resub = blpapi.SubscriptionList()
+                    resub.add(topic=ticker, fields=self.ticker_to_fields[ticker], correlationId=cid)
+                    self.session.resubscribe(resub)
+
+
+    async def disconnect(self, websocket: WebSocket, tickers: list[str]):
+        """Disconnect the WebSocket from a list of tickers' subscription"""
+        for ticker in tickers:
+            if ticker in self.ticker_to_websockets:
+                self.ticker_to_websockets[ticker].discard(websocket)
+                if not self.ticker_to_websockets[ticker]: # No more subscribers for this topic
+                    # Unsub
+                    cid = blpapi.CorrelationId(ticker)
                     unsub = blpapi.SubscriptionList()
-                    unsub.add(topic=topic, correlationId=cid)
+                    unsub.add(topic=ticker, correlationId=cid)
                     self.session.unsubscribe(unsub)
-                    logger.info(f"Unsubscribed from Bloomberg topic: {topic}")
-                del self.topics[topic]
-
-
-    
+                    logger.info(f"Unsubscribed from Bloomberg for ticker: {ticker}")
+                    # Clean up
+                    del self.ticker_to_fields[ticker]
+                    del self.ticker_to_websockets[ticker]

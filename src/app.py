@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse
 from .session_manager import SessionManager
 from .modules.status_monitor import StatusMonitor
 from .modules.refdata_handler import RefDataHandler
-from .modules.subscription_handler import SubscriptionHandler
+from .modules.mktdata_handler import MktDataHandler
 
 
 # Configure logging
@@ -27,8 +27,8 @@ sm.register_module(status_monitor)
 refdata_handler = RefDataHandler()
 sm.register_module(refdata_handler)
 
-subscription_handler = SubscriptionHandler()
-sm.register_module(subscription_handler)
+mktdata_handler = MktDataHandler()
+sm.register_module(mktdata_handler)
 
 
 # This is Gemini+Grok generated frontend demo
@@ -91,7 +91,7 @@ html = """
         document.getElementById('tickerTitle').innerText = `📊 ${ticker} Live Feed`;
 
         function connectWebSocket() {
-            const wsUrl = `ws://localhost:8000/mktdata?ticker=${encodeURIComponent(ticker)}&fields=BID&fields=ASK&fields=LAST_PRICE`;
+            const wsUrl = `ws://localhost:8000/mktdata?tickers=${encodeURIComponent(ticker)}&fields=BID&fields=ASK&fields=LAST_PRICE`;
             const ws = new WebSocket(wsUrl);
             const statusBox = document.getElementById('statusBox');
 
@@ -236,26 +236,24 @@ async def websocket_endpoint(websocket: WebSocket):
 @app.websocket("/mktdata")
 async def mktdata(
     websocket: WebSocket,
-    ticker: str = Query("IBM US Equity"),
-    fields: list[str] = Query(["BID", "ASK"])
+    tickers: list[str] = Query(["IBM US Equity"]),
+    fields: list[str] = Query(["LAST_PRICE"]),
+    # Pass below control first, for most usecases we don't need this and it's more complex to manage
+    # options: str | None =  Query(None, description="Examples: interval=1, interval=0.5&delayed"),
 ):
     # WebSocket connection handshake
     await websocket.accept()
-
-    fields_str = ",".join(fields)
-    topic = f"//blp/mktdata/ticker/{ticker}?fields={fields_str}"
-
-    logger.info(f"New client connected. Topic: {topic}")
+    logger.info(f"New WebSocket established for {tickers} with fields: {fields}")
 
     # Bind running asyncio loop to subscription_handler
-    subscription_handler.loop = asyncio.get_running_loop()
+    mktdata_handler.loop = asyncio.get_running_loop()
 
-    await subscription_handler.connect(websocket, topic)
+    await mktdata_handler.connect(websocket, tickers, fields)
 
     try:
         while True:
             await websocket.receive_text() 
     except WebSocketDisconnect:
-        logger.info(f"Client disconnected from topic: {topic}")
+        logger.info(f"WebSocket disconnected")
     finally:
-        await subscription_handler.disconnect(websocket, topic)
+        await mktdata_handler.disconnect(websocket, tickers)
