@@ -14,21 +14,22 @@ logger = logging.getLogger(__name__)
 
 # blpapi names
 class SessionMsg:
-    SLOW_CONSUMER_WARNING         = blpapi.Name("SlowConsumerWarning")
-    SLOW_CONSUMER_WARNING_CLEARED = blpapi.Name("SlowConsumerWarningCleared")
+    SLOW_CONSUMER_WARNING          = blpapi.Name("SlowConsumerWarning")
+    SLOW_CONSUMER_WARNING_CLEARED  = blpapi.Name("SlowConsumerWarningCleared")
 
-    SESSION_STARTED               = blpapi.Name("SessionStarted")
-    SESSION_TERMINATED            = blpapi.Name("SessionTerminated")
-    SESSION_STARTUP_FAILURE       = blpapi.Name("SessionStartupFailure")
-    SESSION_CONNECTION_UP         = blpapi.Name("SessionConnectionUp")
-    SESSION_CONNECTION_DOWN       = blpapi.Name("SessionConnectionDown")
+    SESSION_STARTED                = blpapi.Name("SessionStarted")
+    SESSION_TERMINATED             = blpapi.Name("SessionTerminated")
+    SESSION_STARTUP_FAILURE        = blpapi.Name("SessionStartupFailure")
+    SESSION_CONNECTION_UP          = blpapi.Name("SessionConnectionUp")
+    SESSION_CONNECTION_DOWN        = blpapi.Name("SessionConnectionDown")
 
-    SERVICE_OPENED                = blpapi.Name("ServiceOpened")
-    SERVICE_OPEN_FAILURE          = blpapi.Name("ServiceOpenFailure")
+    SERVICE_OPENED                 = blpapi.Name("ServiceOpened")
+    SERVICE_OPEN_FAILURE           = blpapi.Name("ServiceOpenFailure")
 
-    SUBSCRIPTION_FAILURE          = blpapi.Name("SubscriptionFailure")
-    SUBSCRIPTION_STARTED          = blpapi.Name("SubscriptionStarted")
-    SUBSCRIPTION_TERMINATED       = blpapi.Name("SubscriptionTerminated")
+    SUBSCRIPTION_FAILURE           = blpapi.Name("SubscriptionFailure")
+    SUBSCRIPTION_STARTED           = blpapi.Name("SubscriptionStarted")
+    SUBSCRIPTION_TERMINATED        = blpapi.Name("SubscriptionTerminated")
+    SUBSCRIPTION_STREAMS_ACTIVATED = blpapi.Name("SubscriptionStreamsActivated")
 
 
 class StatusMonitor(ModuleProtocol):
@@ -74,9 +75,10 @@ class StatusMonitor(ModuleProtocol):
     def process_subscription_status_event(self, event: blpapi.Event, session: blpapi.Session):
         for msg in event:
             match msg.messageType():
-                case SessionMsg.SUBSCRIPTION_STARTED    : logger.info(f"Subscription started...")
-                case SessionMsg.SUBSCRIPTION_FAILURE    : logger.error(f"Subscription failed to start: {msg}")
-                case SessionMsg.SUBSCRIPTION_TERMINATED : logger.error(f"Subscription terminated")
+                case SessionMsg.SUBSCRIPTION_STARTED           : logger.info(f"Subscription started...")
+                case SessionMsg.SUBSCRIPTION_FAILURE           : logger.error(f"Subscription failed to start: {msg}")
+                case SessionMsg.SUBSCRIPTION_TERMINATED        : logger.error(f"Subscription terminated")
+                case SessionMsg.SUBSCRIPTION_STREAMS_ACTIVATED : logger.info(f"Subscription streams activated")
                 case _: logger.info(f"{msg}")
 
 
