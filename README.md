@@ -15,10 +15,10 @@ By pairing this API layer with today's AI coding agents, you can build a highly 
 
 ## Request Examples
 
-```http
+```
 # //blp/refdata
 # Get last price (static, normally last close price) of NVDA US Equity
-GET /refdata?tickers=NVDA%20US%20Equity&fields=PX_LAST HTTP/1.1
+GET /refdata?tickers=NVDA%20US%20Equity&fields=PX_LAST
 
 # //blp/mktdata
 # Subscribe last price (live stream) of Bitcoin
