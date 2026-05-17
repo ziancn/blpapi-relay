@@ -1,5 +1,5 @@
 """
-This module handles //blp/refdata requests and responses.
+This module handles //blp/bqlsvc requests and responses.
 """
 
 import blpapi
@@ -14,34 +14,16 @@ from .protocol import ModuleProtocol
 logger = logging.getLogger(__name__)
 
 
-def parse_refdata_response(msg: blpapi.Message) -> dict:
-    # Utility method to parse Bloomberg response message into a more structured format
-    data = {}
-
-    if msg.hasElement("securityData"):
-        sec_data_array = msg.getElement("securityData")
-        for i in range(sec_data_array.numValues()):
-            sec_data = sec_data_array.getValueAsElement(i)
-            ticker = sec_data.getElementAsString("security")
-            field_data = {}
-            if sec_data.hasElement("fieldData"):
-                fd = sec_data.getElement("fieldData")
-                for j in range(fd.numElements()):
-                    field = fd.getElement(j)
-                    field_name = str(field.name())
-                    field_value = field.getValue()
-                    field_data[field_name] = field_value
-            data[ticker] = field_data
-    return data
+def parse_bql_response(msg: blpapi.Message) -> dict:
+    ...
 
 
-class RefDataHandler(ModuleProtocol):
+class BqlHandler(ModuleProtocol):
     """
-    This module handles //blp/refdata requests and responses.
+    This module handles //blp/bqlsvc requests and responses.
     """
     def __init__(self):
         self.session = None
-        # Key: correlation_id, Value: {"future", "loop"}
         self._pending_requests = {}
 
 
@@ -61,8 +43,8 @@ class RefDataHandler(ModuleProtocol):
         for msg in event:
             if msg.messageType() == blpapi.Name("SessionStarted"):
                 # If session is on, open service
-                logger.info(f"Opening service: //blp/refdata")
-                session.openService("//blp/refdata")
+                logger.info(f"Opening service: //blp/bqlsvc")
+                session.openService("//blp/bqlsvc")
 
 
     def process_response(self, event: blpapi.Event, session: blpapi.Session):
@@ -71,10 +53,13 @@ class RefDataHandler(ModuleProtocol):
 
             cid_value = msg.correlationIds()[0].value()
             logger.debug(f"Received response for CID: {cid_value}")
+            print(str(msg))
 
             if cid_value in self._pending_requests:
                 try:
-                    data = parse_refdata_response(msg)
+                    # TODO: parse data into json
+                    # data = parse_bql_response(msg)
+                    data = str(msg)
                     loop = self._pending_requests[cid_value]["loop"]
                     future = self._pending_requests[cid_value]["future"]
                     if not future.done():
@@ -88,17 +73,14 @@ class RefDataHandler(ModuleProtocol):
 
 
     # Async APIs
-    async def get_refdata(self, tickers: list[str], fields: list[str]) -> str:
-        service = self.session.getService("//blp/refdata")
-        request = service.createRequest("ReferenceDataRequest")
+    async def bquery(self, query: str) -> str:
+        service = self.session.getService("//blp/bqlsvc")
+        request = service.createRequest("sendQuery")
 
-        for t in tickers:
-            request.append("securities", t)
-    
-        for f in fields:
-            request.append("fields", f)
+        request.set("expression", "query")
 
         cid = blpapi.CorrelationId(str(uuid.uuid4()))
+        print(request)
         self.session.sendRequest(request, correlationId=cid)
         
         loop = asyncio.get_running_loop()

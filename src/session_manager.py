@@ -14,14 +14,6 @@ from .modules.protocol import ModuleProtocol
 logger = logging.getLogger(__name__)
 
 
-# Common services to open during startup
-COMMON_SERVICES = [
-    "//blp/refdata",
-    "//blp/mktdata",
-    # "//blp/apiflds",
-]
-
-
 # Event name
 EVENT_NAME = {
     blpapi.Event.UNKNOWN:              "UNKNOWN",
@@ -78,14 +70,6 @@ class SessionManager:
     def start(self):
         if not self._session.start():
             raise RuntimeError("Failed to start EMSX session")
-        
-        for service in COMMON_SERVICES:
-            try:
-                self._session.openService(service)
-                self._opened_services.add(service)
-                logger.info(f"Opened service: {service}")
-            except Exception as e:
-                logger.warning(f"Failed to open service {service}: {e}")
 
 
     def start_async(self):

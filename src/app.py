@@ -4,6 +4,10 @@ FastAPI application factory and routes.
 
 import asyncio
 import logging
+import math
+import xlwings as xw
+
+from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Query, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
@@ -12,6 +16,7 @@ from .session_manager import SessionManager
 from .modules.status_monitor import StatusMonitor
 from .modules.refdata_handler import RefDataHandler
 from .modules.mktdata_handler import MktDataHandler
+from .modules.bql_handler import BqlHandler
 
 
 # Configure logging
@@ -29,6 +34,9 @@ sm.register_module(refdata_handler)
 
 mktdata_handler = MktDataHandler()
 sm.register_module(mktdata_handler)
+
+bql_handler = BqlHandler()
+sm.register_module(bql_handler)
 
 
 # This is Gemini+Grok generated frontend demo
@@ -257,3 +265,75 @@ async def mktdata(
         logger.info(f"WebSocket disconnected")
     finally:
         await mktdata_handler.disconnect(websocket, tickers)
+
+
+@app.get("/bql")
+async def bql(
+    query: str,
+    excel_relay: bool = True,
+):
+    logger.debug(f"BQL Query received: {query}")
+    
+    if not excel_relay:
+        raise HTTPException(status_code=400, detail="Direct BQL API is disabled.")
+    
+    try:
+        wb = xw.Book(Path(__file__).parent / "bql.xlsx")
+        ws = wb.sheets[0]
+        ws.clear_contents()
+        ws.range("A1").formula = f'=BQL.Query("{query}")'
+        
+        # Loop to check if data arrived
+        timeout_seconds, retry_interval = 20, 0.2
+        max_retries = int(math.ceil(timeout_seconds/retry_interval))
+        
+        for i in range(max_retries):
+            await asyncio.sleep(retry_interval)
+            
+            a1_val = ws.range("A1").value
+            if a1_val is None: continue
+                
+            a1_str = str(a1_val).strip()
+            if "Requesting" in a1_str or a1_str == "nan" or a1_str == "#N/A": continue
+            if "ERR" in a1_str: raise HTTPException(status_code=422, detail=f"Bloomberg Error: {a1_str}")
+            
+            break
+        
+        # Parse result
+        current_table = ws.range("A1").expand()
+        table_value = current_table.value
+
+        if not isinstance(table_value, list):
+            # Only one cell (single underlying and single field)
+            formatted_json = [{"value": table_value}]
+        elif not isinstance(table_value[0], list):
+            if len(table_value) == 1:
+                # Safety check, if still only one cell
+                formatted_json = [{"value": table_value[0]}]
+            else:
+                # Only one column of data
+                header = str(table_value[0])
+                formatted_json = [{header: row} for row in table_value[1:]]
+        else:
+            # Clear all-empty rows
+            clean_table = [row for row in table_value if any(cell is not None for cell in row)]
+            if len(clean_table) == 1:
+                # Only one row
+                formatted_json = [{"value": cell} for cell in clean_table[0]]
+            else:
+                # Standard 2-dimensional table
+                headers = [str(h) if h is not None else f"col_{idx}" for idx, h in enumerate(clean_table[0])]
+                rows = clean_table[1:]
+                formatted_json = [dict(zip(headers, row)) for row in rows]
+
+        # Return the parsed result
+        return {
+            "status": "success",
+            "total_rows": len(formatted_json),
+            "data": formatted_json
+        }
+            
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=f"Excel Relay internal error: {str(e)}")

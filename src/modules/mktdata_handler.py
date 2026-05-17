@@ -84,8 +84,17 @@ class MktDataHandler(ModuleProtocol):
             session: blpapi.Session,
     ):
         match event.eventType():
-            case blpapi.Event.SUBSCRIPTION_DATA: self.process_subscription_data(event, session)
+            case blpapi.Event.SESSION_STATUS    : self.process_session_status_event(event, session)
+            case blpapi.Event.SUBSCRIPTION_DATA : self.process_subscription_data(event, session)
             case _: pass
+
+
+    def process_session_status_event(self, event: blpapi.Event, session: blpapi.Session):
+        for msg in event:
+            if msg.messageType() == blpapi.Name("SessionStarted"):
+                # If session is on, open service
+                logger.info(f"Opening service: //blp/mktdata")
+                session.openService("//blp/mktdata")
 
 
     def process_subscription_data(self, event: blpapi.Event, session: blpapi.Session):
