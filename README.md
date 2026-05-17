@@ -1,4 +1,4 @@
-# BLPAPI RELAY
+# BLPAPI RELAY 🏃‍♀️🔀🏃‍♀️
 
 A lightweight, RESTful API relay layer that allows you to communicate with the Bloomberg API (BLPAPI) via standard HTTP requests.
 
