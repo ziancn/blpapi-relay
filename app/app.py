@@ -4,22 +4,19 @@ FastAPI application factory and routes.
 
 import asyncio
 import logging
-import math
-import xlwings as xw
 
-from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Query, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 
 from .web_grab import get_hkex_ss_turnover
-from .bql_via_excel import excel_bql
+from ..src.bql_via_excel import excel_bql
 
-from .session_manager import SessionManager
-from .modules.status_monitor import StatusMonitor
-from .modules.refdata_handler import RefDataHandler
-from .modules.mktdata_handler import MktDataHandler
-from .modules.bql_handler import BqlHandler
+from ..src.session_manager import SessionManager
+from ..src.modules.status_monitor import StatusMonitor
+from ..src.modules.refdata_handler import RefDataHandler
+from ..src.modules.mktdata_handler import MktDataHandler
+# from ..src.modules.bql_handler import BqlHandler
 
 
 logger = logging.getLogger(__name__)
@@ -37,8 +34,8 @@ sm.register_module(refdata_handler)
 mktdata_handler = MktDataHandler()
 sm.register_module(mktdata_handler)
 
-bql_handler = BqlHandler()
-sm.register_module(bql_handler)
+# bql_handler = BqlHandler()
+# sm.register_module(bql_handler)
 
 
 # This is the new way to handle startup and shutdown in FastAPI
@@ -46,20 +43,17 @@ sm.register_module(bql_handler)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Handle startup and shutdown."""
-    try:
-        sm.start()
-    except Exception as e:
-        raise
+    try: sm.start()
+    except Exception as e: raise
 
     yield
     
-    try:
-        sm.stop()
-    except Exception as e:
-        raise
+    try: sm.stop()
+    except Exception as e: raise
 
 
 # FastAPI App
+# APIs defined below
 app = FastAPI(
     title="Bloomberg API Relay",
     description="A relay layer for Bloomberg BLPAPI via RESTful API endpoints implemented with FastAPI",
@@ -68,20 +62,15 @@ app = FastAPI(
 )
 
 
-@app.get("/")
+@app.get("/demopage")
 async def get():
-    from .demo_html import html
-    return HTMLResponse(html)
+    from .demo_page import demo_page
+    return HTMLResponse(demo_page)
 
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
     return Response(status_code=204)
-
-
-@app.get("/helloworld")
-async def helloworld():
-    return {"message": "Hello, World!"}
 
 
 @app.get("/refdata")
@@ -93,17 +82,9 @@ async def get_refdata(
         data = await refdata_handler.get_refdata(tickers, fields)
         return {"status": "success", "data": data}
     except asyncio.TimeoutError:
-        raise HTTPException(status_code=504, detail="Bloomberg Timeout")
+        raise HTTPException(status_code=504, detail="Timeout querying Bloomberg API")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    while True:
-        data = await websocket.receive_text()
-        await websocket.send_text(f"Message text was: {data}")
 
 
 @app.websocket("/mktdata")

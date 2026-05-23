@@ -1,6 +1,6 @@
 # This is Gemini+Grok generated frontend demo
 # Able to query live data successfully
-html = """
+demo_page = """
 <!DOCTYPE html>
 <html>
 <head>
